@@ -1,0 +1,26 @@
+<!doctype html>
+<!--
+  index.html – React / Phaser を初期化する唯一の HTML ファイルです。
+  <div id="root"> に React アプリがマウントされ、そこから Phaser
+  ゲームが生成されます。ソースコードを読む AI や開発者向けに、
+  ここがエントリポイントであることを明記しておきます。
+-->
+<html lang="ja">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Gunevo Tower Battle — host-authoritative online tower stacking battle game." />
+    <meta property="og:title" content="Gunevo Tower Battle" />
+    <meta property="og:description" content="Online tower stacking battle with host-authoritative sync." />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="/style.css">
+    <title>Gunevo Tower Battle</title>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+
+</body>
+</html>

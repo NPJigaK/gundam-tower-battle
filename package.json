@@ -1,0 +1,46 @@
+{
+    "name": "gunevo-tower-battle",
+    "description": "Gunevo Tower Battle — host-authoritative online tower stacking game.",
+    "version": "1.1.0",
+    "author": "Gunevo Tower Battle",
+    "license": "MIT",
+    "keywords": [
+        "gunevo",
+        "tower-battle",
+        "phaser",
+        "phaser3",
+        "matterjs",
+        "react",
+        "trystero",
+        "vite",
+        "typescript"
+    ],
+    "scripts": {
+        "dev": "vite --config vite/config.dev.mjs",
+        "build": "vite build --config vite/config.prod.mjs",
+        "dev-nolog": "vite --config vite/config.dev.mjs",
+        "build-nolog": "vite build --config vite/config.prod.mjs"
+    },
+    "dependencies": {
+        "mitt": "^3.0.1",
+        "phaser": "^3.88.2",
+        "phaser3-rex-plugins": "^1.80.15",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "trystero": "^0.21.3"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.22.0",
+        "@types/react": "^19.0.10",
+        "@types/react-dom": "^19.0.4",
+        "@vitejs/plugin-react": "^4.3.4",
+        "eslint": "^9.22.0",
+        "eslint-plugin-react-hooks": "^5.2.0",
+        "eslint-plugin-react-refresh": "^0.4.19",
+        "globals": "^16.0.0",
+        "terser": "^5.28.1",
+        "typescript": "~5.7.2",
+        "typescript-eslint": "^8.26.1",
+        "vite": "^6.3.1"
+    }
+}
