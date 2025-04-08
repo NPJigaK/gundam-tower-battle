@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>オンラインじゃんけんゲーム（圧縮版シグナリング）</title>
+    <!-- SimplePeerライブラリをCDNから読み込み -->
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <!-- LZ-StringライブラリをCDNから読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 2rem auto;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-bottom: 1rem;
+        }
+
+        button {
+            padding: 0.5rem;
+            margin: 0.2rem;
+        }
+
+        #game {
+            display: none;
+            margin-top: 2rem;
+        }
+
+        #status {
+            white-space: pre-wrap;
+            background: #f4f4f4;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>オンラインじゃんけんゲーム（圧縮版シグナリング）</h1>
+    <p>※ このゲームはGitHub Pagesのみで動作します。シグナリング情報の交換は、コピー＆ペーストで手動に行いますが、LZ-String による圧縮で文字列が短くなります。</p>
+
+    <!-- シグナリング関連のUI -->
+    <div id="signalSection">
+        <h2>シグナリング</h2>
+        <div id="offerSection">
+            <h3>Offer作成（発信側）</h3>
+            <button id="createOffer">Offer作成</button>
+            <textarea id="offerOutput" placeholder="ここに圧縮されたOfferのSDP情報が表示されます"></textarea>
+            <button id="copyOffer">コピーする</button>
+        </div>
+        <div id="answerSection">
+            <h3>Answer作成（受信側）</h3>
+            <button id="createAnswer">Answer作成</button>
+            <textarea id="answerOutput" placeholder="ここに圧縮されたAnswerのSDP情報が表示されます"></textarea>
+            <button id="copyAnswer">コピーする</button>
+        </div>
+        <div>
+            <h3>リモートシグナリング情報の入力</h3>
+            <textarea id="remoteInput" placeholder="相手の圧縮されたOfferまたはAnswerのJSONを貼り付けてください"></textarea>
+            <button id="connectButton">接続</button>
+        </div>
+    </div>
+
+    <!-- ゲームUI -->
+    <div id="game">
+        <h2>じゃんけんゲーム</h2>
+        <p>あなたの選択:</p>
+        <button class="moveBtn" data-move="rock">グー</button>
+        <button class="moveBtn" data-move="paper">パー</button>
+        <button class="moveBtn" data-move="scissors">チョキ</button>
+        <div id="gameStatus"></div>
+    </div>
+
+    <div id="status">
+        接続状態: 未接続
+    </div>
+
+    <script>
+        let peer;
+        let myMove = null;
+        let opponentMove = null;
+
+        const statusEl = document.getElementById('status');
+        const gameStatusEl = document.getElementById('gameStatus');
+        const gameSection = document.getElementById('game');
+
+        // 状態ログの更新用関数
+        function logStatus(message) {
+            statusEl.textContent += "\n" + message;
+        }
+
+        // ゲーム状態更新：両者の手が出た場合に勝敗を決定
+        function updateGameStatus() {
+            if (myMove && opponentMove) {
+                let result = determineWinner(myMove, opponentMove);
+                gameStatusEl.textContent = `あなた: ${moveToJapanese(myMove)} vs 相手: ${moveToJapanese(opponentMove)}\n結果: ${result}`;
+                // 次のラウンドに備えて手をリセット
+                myMove = null;
+                opponentMove = null;
+            }
+        }
+
+        // 勝敗判定
+        function determineWinner(move1, move2) {
+            if (move1 === move2) return "引き分け";
+            if (
+                (move1 === "rock" && move2 === "scissors") ||
+                (move1 === "paper" && move2 === "rock") ||
+                (move1 === "scissors" && move2 === "paper")
+            ) {
+                return "あなたの勝ち！";
+            } else {
+                return "あなたの負け！";
+            }
+        }
+
+        // 手を日本語表記に変換
+        function moveToJapanese(move) {
+            if (move === "rock") return "グー";
+            if (move === "paper") return "パー";
+            if (move === "scissors") return "チョキ";
+            return "";
+        }
+
+        // SimplePeerインスタンスの生成
+        function createPeer(initiator) {
+            peer = new SimplePeer({ initiator: initiator, trickle: false });
+
+            peer.on('signal', data => {
+                const jsonData = JSON.stringify(data);
+                // LZ-Stringで圧縮して、コピー用に短い文字列に変換
+                let compressed = LZString.compressToEncodedURIComponent(jsonData);
+                if (initiator) {
+                    document.getElementById('offerOutput').value = compressed;
+                } else {
+                    document.getElementById('answerOutput').value = compressed;
+                }
+            });
+
+            peer.on('connect', () => {
+                logStatus("接続成功！");
+                // 接続後、ゲームUIを表示
+                gameSection.style.display = 'block';
+            });
+
+            peer.on('data', data => {
+                try {
+                    // 受信したデータは圧縮されず、生のJSONが送られてくる前提
+                    const message = JSON.parse(data);
+                    if (message.type === 'move') {
+                        opponentMove = message.move;
+                        logStatus("相手の手を受信: " + moveToJapanese(opponentMove));
+                        updateGameStatus();
+                    }
+                } catch (e) {
+                    logStatus("受信データの解析エラー: " + e);
+                }
+            });
+
+            peer.on('error', err => {
+                logStatus("エラー: " + err);
+            });
+        }
+
+        // 発信側：Offer作成
+        document.getElementById('createOffer').addEventListener('click', () => {
+            createPeer(true);
+            logStatus("Offer作成中...");
+        });
+
+        // 受信側：Answer作成
+        document.getElementById('createAnswer').addEventListener('click', () => {
+            createPeer(false);
+            logStatus("Answer作成中...");
+        });
+
+        // リモートのシグナリング情報を取り込み、接続を開始
+        document.getElementById('connectButton').addEventListener('click', () => {
+            const remoteData = document.getElementById('remoteInput').value;
+            if (!remoteData) {
+                alert("リモートのシグナリングデータを入力してください");
+                return;
+            }
+            try {
+                // LZ-Stringで展開してからパース
+                const decompressedData = LZString.decompressFromEncodedURIComponent(remoteData);
+                const signal = JSON.parse(decompressedData);
+                peer.signal(signal);
+                logStatus("シグナリングデータを適用しました");
+            } catch (e) {
+                alert("無効なシグナリングデータです");
+            }
+        });
+
+        // コピー機能の実装
+        document.getElementById('copyOffer').addEventListener('click', () => {
+            const offerText = document.getElementById('offerOutput').value;
+            if (offerText) {
+                navigator.clipboard.writeText(offerText)
+                    .then(() => alert('Offerの内容をクリップボードにコピーしました'))
+                    .catch(err => alert('コピーに失敗しました: ' + err));
+            } else {
+                alert("Offerの内容がありません");
+            }
+        });
+
+        document.getElementById('copyAnswer').addEventListener('click', () => {
+            const answerText = document.getElementById('answerOutput').value;
+            if (answerText) {
+                navigator.clipboard.writeText(answerText)
+                    .then(() => alert('Answerの内容をクリップボードにコピーしました'))
+                    .catch(err => alert('コピーに失敗しました: ' + err));
+            } else {
+                alert("Answerの内容がありません");
+            }
+        });
+
+        // じゃんけんの手を選択して送信する処理
+        document.querySelectorAll('.moveBtn').forEach(button => {
+            button.addEventListener('click', () => {
+                if (!peer || !peer.connected) {
+                    alert("まだ接続されていません");
+                    return;
+                }
+                const move = button.getAttribute('data-move');
+                myMove = move;
+                logStatus("あなたの手: " + moveToJapanese(move));
+                // ここではシグナリング情報の圧縮は行わず、生のJSONを送信（圧縮はシグナリングの交換時のみ）
+                peer.send(JSON.stringify({ type: 'move', move: move }));
+                updateGameStatus();
+            });
+        });
+    </script>
+</body>
+
+</html>
