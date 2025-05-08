@@ -8,7 +8,7 @@
  * --------------------------------------------------------------------------
  */
 
-import { forwardRef, useEffect, useLayoutEffect, useRef } from "react";
+import React, { forwardRef, useEffect, useLayoutEffect, useRef } from "react";
 import StartGame from "./game/main"; // Phaser.Game を生成する factory
 import { EventBus } from "./game/EventBus"; // React–Phaser 通信用バス
 

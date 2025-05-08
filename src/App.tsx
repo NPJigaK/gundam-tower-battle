@@ -9,7 +9,7 @@
 //    生成して <div> にバインドする。React の再レンダリングは不要。
 // =============================================================================
 
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import StartGame from "./game/main"; // Phaser エントリポイント
 
 /**
