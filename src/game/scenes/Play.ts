@@ -318,6 +318,16 @@ export class Play extends Scene {
      * update – 静止判定 & タワー崩落
      * ==================================================================== */
     update() {
+        /* GameOver 判定 – ブロックが画面下 +80px を超えたら終了 */
+        const pieces = Array.from(this.settled.values());
+        const toWatch = this.waitingForStill
+            ? [...pieces, ...(this.dropping ? [this.dropping] : [])]
+            : pieces;
+        if (toWatch.some((p) => p.y > this.scale.height + 80)) {
+            this.gameOver();
+            return;
+        }
+
         /* 静止判定（ホストのみ） */
         if (this.net?.isHost && this.waitingForStill && this.dropping) {
             const { speed, angularSpeed } = this.dropping
@@ -343,13 +353,6 @@ export class Play extends Scene {
         /* カメラ中央寄せ (X) */
         this.cameras.main.scrollX =
             -(this.cameras.main.width - this.scale.width) / 2;
-
-        /* タワー崩落検知 */
-        for (const [, s] of this.settled)
-            if (s.y > this.scale.height + 200) {
-                this.gameOver();
-                break;
-            }
     }
 
     /* ======================================================================
