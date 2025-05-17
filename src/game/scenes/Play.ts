@@ -218,6 +218,9 @@ export class Play extends Scene {
                 shape: shapes[meta.key],
             })
             .setScale(meta.scale)
+            .setFriction(meta.friction)
+            .setBounce(meta.bounce)
+            .setMass(meta.mass)
             .setStatic(true)
             .setData("pid", `p${++this.pieceSeq}`)
             .setData("gIdx", gundams.indexOf(meta));
@@ -322,6 +325,9 @@ export class Play extends Scene {
                     shape: shapes[meta.key],
                 })
                 .setScale(meta.scale)
+                .setFriction(meta.friction)
+                .setBounce(meta.bounce)
+                .setMass(meta.mass)
                 .setAngle(p.angle)
                 .setStatic(true)
                 .setData("pid", p.id)
@@ -347,7 +353,6 @@ export class Play extends Scene {
                 : (this.stillFrames = 0);
 
             if (this.stillFrames >= Play.STILL_NEED) {
-                this.dropping.setStatic(true);
                 this.settled.set(this.dropping.getData("pid"), this.dropping);
                 this.dropping = undefined;
                 this.waitingForStill = false;
