@@ -358,7 +358,12 @@ export class Play extends Scene {
             -(this.cameras.main.width - this.scale.width) / 2;
 
         /* タワー崩落検知 - ブロックが画面下 +FALL_MARGIN を越えたら終了 */
-        for (const [, s] of this.settled)
+        const pieces: Phaser.Physics.Matter.Image[] = [];
+        this.settled.forEach((s) => pieces.push(s));
+        if (this.dropping) pieces.push(this.dropping);
+        if (this.current) pieces.push(this.current);
+
+        for (const s of pieces)
             if (s.y > this.scale.height + Play.FALL_MARGIN) {
                 this.gameOver();
                 break;
