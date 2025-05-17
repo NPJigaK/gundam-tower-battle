@@ -7,11 +7,14 @@
 //  必要な情報をコメントとして残しています。
 // ---------------------------------------------------------------------------
 import { joinRoom, Room } from "trystero";
-import type { PieceInput, SyncPayload, GameResult } from "../types";
+import type { PieceInput, SyncPayload, GameResult, RematchDecision } from "../types";
 
 export interface TrysteroNetwork {
   /** true のときホストとして振る舞う */
   isHost: boolean;
+
+  /** ルームID */
+  roomId: string;
 
   /** 生の Trystero Room オブジェクト。必要があれば直接参照可能 */
   room: Room;
@@ -21,10 +24,14 @@ export interface TrysteroNetwork {
   sendSync: (sync: SyncPayload) => void;
   sendResult: (result: GameResult) => void;
 
+  sendRematch: (d: RematchDecision) => void;
+
   /* 受信ハンドラ登録 — onXXX(cb) 形式でリスナを追加 */
   onInput: (cb: (input: PieceInput) => void) => void;
   onSync:  (cb: (sync: SyncPayload) => void) => void;
   onResult: (cb: (result: GameResult) => void) => void;
+
+  onRematch: (cb: (d: RematchDecision) => void) => void;
 }
 
 export function createTrysteroNetwork(
@@ -38,15 +45,19 @@ export function createTrysteroNetwork(
   const [sendInput, onInput] = room.makeAction<PieceInput>("input");
   const [sendSync, onSync] = room.makeAction<SyncPayload>("sync");
   const [sendResult, onResult] = room.makeAction<GameResult>("result");
+  const [sendRematch, onRematch] = room.makeAction<RematchDecision>("rematch");
 
   return {
     isHost,
+    roomId,
     room,
     sendInput,
     sendSync,
     sendResult,
+    sendRematch,
     onInput,
     onSync,
     onResult,
+    onRematch,
   };
 }
