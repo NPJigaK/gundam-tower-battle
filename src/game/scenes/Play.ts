@@ -66,6 +66,7 @@ export class Play extends Scene {
     private static readonly DROP_MARGIN = 120;
     private static readonly TOP_OFFSET = 400;
     private static readonly EXTEND_Y = 200;
+    private static readonly FALL_MARGIN = 80;
 
     constructor() {
         super("Play");
@@ -98,8 +99,18 @@ export class Play extends Scene {
         const { width, height } = this.scale;
         this.worldHeight = height;
 
-        /* 物理ワールド設定 */
-        this.matter.world.setBounds(0, 0, width, height);
+        /* 物理ワールド設定 - 床を作らず落下可能にする */
+        this.matter.world.setBounds(
+            0,
+            0,
+            width,
+            height,
+            64,
+            false,
+            false,
+            false,
+            false,
+        );
         this.matter.world.setGravity(0, 0.8);
 
         /* 土台 */
@@ -344,9 +355,9 @@ export class Play extends Scene {
         this.cameras.main.scrollX =
             -(this.cameras.main.width - this.scale.width) / 2;
 
-        /* タワー崩落検知 */
+        /* タワー崩落検知 - ブロックが画面下 +FALL_MARGIN を越えたら終了 */
         for (const [, s] of this.settled)
-            if (s.y > this.scale.height + 200) {
+            if (s.y > this.scale.height + Play.FALL_MARGIN) {
                 this.gameOver();
                 break;
             }
@@ -368,7 +379,17 @@ export class Play extends Scene {
             this.worldHeight += Play.EXTEND_Y;
 
             const w = this.scale.width;
-            this.matter.world.setBounds(0, this.worldTop, w, this.worldHeight);
+            this.matter.world.setBounds(
+                0,
+                this.worldTop,
+                w,
+                this.worldHeight,
+                64,
+                false,
+                false,
+                false,
+                false,
+            );
             this.cameras.main.setBounds(0, this.worldTop, w, this.worldHeight);
             this.updateMiniCamZoom();
         }
