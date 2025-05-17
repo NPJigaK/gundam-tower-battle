@@ -266,6 +266,7 @@ export class Play extends Scene {
             pieces,
             worldTop: this.worldTop,
             worldHeight: this.worldHeight,
+            scrollY: this.cameras.main.scrollY,
         });
     }
 
@@ -280,6 +281,7 @@ export class Play extends Scene {
         /* 値を更新して物理 & カメラ両方を再設定 */
         this.worldTop = sync.worldTop;
         this.worldHeight = sync.worldHeight;
+        this.cameras.main.scrollY = sync.scrollY;
 
         const towerTop = this.getTowerTopY();
         const spawnY = towerTop - Play.DROP_MARGIN;

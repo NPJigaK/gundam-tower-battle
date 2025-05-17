@@ -25,6 +25,7 @@ export interface SyncPayload {
 
     worldTop: number;
     worldHeight: number;
+    scrollY: number; // ホストカメラの scrollY
 
     [k: string]: string | number | PieceSync[];
 }
