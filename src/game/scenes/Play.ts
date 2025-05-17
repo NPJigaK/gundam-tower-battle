@@ -430,10 +430,9 @@ export class Play extends Scene {
      * gameOver() — ゲーム終了処理
      * ------------------------------------------------------------------ */
     private gameOver() {
-        if (this.net?.isHost)
-            this.net.sendResult(
-                this.currentTurn === "host" ? "client" : "host"
-            );
-        this.scene.start("GameOver", { score: this.score });
+        const winner: GameResult =
+            this.currentTurn === "host" ? "client" : "host";
+        if (this.net?.isHost) this.net.sendResult(winner);
+        this.scene.start("GameOver", { score: this.score, winner });
     }
 }
