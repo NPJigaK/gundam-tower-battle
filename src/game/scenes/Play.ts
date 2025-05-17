@@ -1,128 +1,124 @@
-/* ========================================================================== *
- *  Play.ts
- * -------------------------------------------------------------------------- *
- *  実際にゲームループを司る Scene クラス です。
- *  - ブロック（＝ガンダム機体）を 1 体ずつ生成しては落とし、塔を作ります
- *  - ブロックたちが完全に静止したら次のブロックを出現させます
- *  - どれかが画面の一番下 +80 px を超えて落ちたらゲームオーバー
- *  - カメラ・ワールド境界・ミニマップの動的拡張もすべてここで行います
- * ======================================================================= */
+/* ========================================================================= *
+ * Play.ts – オンライン版 + ミニマップ／ワールド拡張／自動 spawnY 復活
+ * ------------------------------------------------------------------------- *
+ *  • Host → Client 50 ms 同期は以前の実装を維持
+ *  • 追加機能
+ *      1. 動的ワールド拡張 (上方向 200 px ずつ)
+ *      2. ミニマップカメラ (右下 160×240) – ワールド中央を常に表示
+ *      3. ピース spawnY = 現在タワー頂 -120 px
+ *      4. カメラを塔頂 +400 px へ追従
+ * ========================================================================= */
 
-import { Scene, Input } from "phaser";
-import { gundams } from "../const/gundams"; // ← ピースのメタ定義
-import { EventBus } from "../EventBus"; // ← 簡易デバッグ用
+import Phaser, { Scene, Input } from "phaser";
+import { gundams } from "../const/gundams";
+import {
+    createTrysteroNetwork,
+    TrysteroNetwork,
+} from "../../network/trysteroConnection";
+import type {
+    PieceSync,
+    PieceInput,
+    GameResult,
+    PlayerSide,
+    SyncPayload,
+} from "../../types";
 
-/* -------------------------------------------------------------------------- *
- *  Scene クラス本体
- *  （Phaser では 1 つのゲーム画面＝1 Scene。create → update を繰り返す）
- * ------------------------------------------------------------------------ */
 export class Play extends Scene {
-    /* ─────────────────────── UI / ゲーム進行ステート ──────────────────── */
-    /** 現在のスコア（＝落としたブロック数）。GameOver で送信する            */
-    private score = 0;
-    /** 残り時間（秒）。毎秒デクリメントし 0 になったら強制 GameOver         */
-    private timeLeft = 600;
+    /* ── ネットワーク related ─────────────────────────────────────────── */
+    private net?: TrysteroNetwork;
+    private isOffline = true;
 
-    /** 左上 “Score: ” の Text  */
+    /* ── ターン制 ─────────────────────────────────────────────────────── */
+    private currentTurn: PlayerSide = "host";
+    private get mySide(): PlayerSide {
+        return this.net?.isHost ? "host" : "client";
+    }
+    private get isMyTurn(): boolean {
+        return this.currentTurn === this.mySide;
+    }
+
+    /* ── ピース管理 ───────────────────────────────────────────────────── */
+    private pieceSeq = 0;
+    private current?: Phaser.Physics.Matter.Image;
+    private dropping?: Phaser.Physics.Matter.Image;
+    private settled: Map<string, Phaser.Physics.Matter.Image> = new Map();
+
+    /* ── 静止判定 ─────────────────────────────────────────────────────── */
+    private waitingForStill = false;
+    private stillFrames = 0;
+    private static readonly STILL_NEED = 6;
+    private static readonly SPEED_TH = 0.02;
+
+    /* ── UI / 状態 ─────────────────────────────────────────────────────── */
+    private score = 0;
+    private timeLeft = 600;
     private scoreText!: Phaser.GameObjects.Text;
-    /** 右上 “Time: ” の Text   */
     private timerText!: Phaser.GameObjects.Text;
 
-    /* ─────────────────────── ピース状態管理 ─────────────────────────── */
-    /** 空中で操作待機している **静止** ピース（カーソル追従）               */
-    private current?: Phaser.Physics.Matter.Image;
-    /** dynamic 化して落下中のピース。静止を検知したら settled へ移動        */
-    private dropping?: Phaser.Physics.Matter.Image;
-    /** 完全停止判定済みのピースたち（dynamic のまま塔を構成する）          */
-    private settled: Phaser.Physics.Matter.Image[] = [];
-
-    /* ────────────── “全ピース静止” 判定パラメータ ───────────────────── */
-    /** 連続静止フレーム数（動いたら 0 に戻す）                             */
-    private stillFrames = 0;
-    /** true の間は “全ピース静止” を監視し、静止確定で次ピース生成           */
-    private waitingForStill = false;
-    /** 速度がこれ未満なら「ほぼ静止」（単位: px/step）                     */
-    private static readonly MAX_SPEED = 0.01;
-    /** 角速度がこれ未満なら「ほぼ静止」（単位: rad/step）                  */
-    private static readonly MAX_ANG = 0.01;
-    /** 上 2 条件を **NEED_STILL** フレーム連続で満たしたら静止確定         */
-    private static readonly NEED_STILL = 90; // ≒1.5 秒
-
-    /* ────────────── カメラ & ワールド拡張に関する定数 ────────────────── */
-    /** 次ピースは「塔頂(＋土台) の 120px 上」に出現させる                  */
-    private static readonly DROP_MARGIN = 120;
-    /** メインカメラは塔頂 +400px を常に映し続ける                          */
-    private static readonly TOP_OFFSET = 400;
-    /** ワールド上端に達したら 1 回ごとに 200px ずつ上へ延長する             */
-    private static readonly EXTEND_Y = 200;
-
-    /* ────────────── 動的に変わるワールド境界情報 ────────────────────── */
-    /** 現在のワールド最上端（負値で上方向へ拡張していく）                  */
-    private worldTop = 0;
-    /** ワールドの総高さ（下端 0 〜 上端 worldTop）                         */
-    private worldHeight = 0;
-    /** 土台(ground) の当たり判定 “上面 y”（塔頂計算に含めるため保持）       */
-    private groundTop = 0;
-
-    /** ミニマップ用カメラ（右下 160×240）                                  */
+    /* ── ワールド／カメラ拡張 ─────────────────────────────────────────── */
+    private worldTop = 0; // 上端 y (負)
+    private worldHeight = 0; // 総高さ
+    private groundTop = 0; // 土台上面 y
     private miniCam!: Phaser.Cameras.Scene2D.Camera;
+
+    /* ── 定数 (旧シングル版を踏襲) ───────────────────────────────────── */
+    private static readonly SYNC_MS = 50;
+    private static readonly DROP_MARGIN = 120;
+    private static readonly TOP_OFFSET = 400;
+    private static readonly EXTEND_Y = 200;
 
     constructor() {
         super("Play");
     }
 
-    /* ====================================================================== *
-     *  create() : シーン初期化。ここでステージ・UI・入力を全て構築する
+    /* ======================================================================
+     * init – room 情報受取
      * ==================================================================== */
-    create(): void {
-        /* 画面サイズを取得してワールド初期高さとして保存 ---------------- */
+    init(data: { roomId?: string; isHost?: boolean; net?: TrysteroNetwork }) {
+        if (data.roomId) {
+            this.net =
+                data.net ?? createTrysteroNetwork(data.roomId, !!data.isHost);
+            this.isOffline = false;
+
+            if (this.net.isHost) {
+                this.net.onInput((input) => this.applyRemoteInput(input));
+            } else {
+                this.net.onSync((sync) => this.applySync(sync));
+                this.net.onResult((r) =>
+                    this.scene.start("GameOver", { winner: r })
+                );
+            }
+        }
+    }
+
+    /* ======================================================================
+     * create
+     * ==================================================================== */
+    create() {
         const { width, height } = this.scale;
         this.worldHeight = height;
 
-        /* ──────────── Matter World ▸ 物理シミュレーション設定 ───────── */
-        this.matter.world.createDebugGraphic(); // 緑線ワイヤーフレーム
-        this.matter.world.setBounds(
-            /* x,y,width,height        */ 0,
-            0,
-            width,
-            height,
-            /* thickness               */ 
-            64,
-            /* 左 右 下 上 の壁         */ 
-            false,
-            false,
-            false,
-            false
-        ); // ← 左右の壁を除去
-        this.matter.world.setGravity(0, 0.8); // 標準より軽い重力
-        this.matter.world.engine.positionIterations = 12; // すり抜け防止
-        this.matter.world.engine.velocityIterations = 12;
+        /* 物理ワールド設定 */
+        this.matter.world.setBounds(0, 0, width, height);
+        this.matter.world.setGravity(0, 0.8);
 
-        /* ──────────── Ground（土台）生成 ───────────────────────── */
+        /* 土台 */
         const groundH = 40;
         const groundW = width * 0.5;
         const groundY = height * 0.8;
-        // 物理 Body（isStatic=true なので動かない）
         this.matter.add.rectangle(width / 2, groundY, groundW, groundH, {
             isStatic: true,
-            friction      : 0.9,  // 動摩擦   ← 土台だけ高めに
-            frictionStatic: 1.0,  // 静止摩擦 ← 土台だけ高めに
         });
-        // 見た目用の矩形（茶色）
         this.add.rectangle(width / 2, groundY, groundW, groundH, 0x8b4513);
-        // 土台上面 y（衝突判定は中心 y 基準なので半分引く）
         this.groundTop = groundY - groundH / 2;
 
-        /* ──────────── UI: スコア / タイマー ───────────────────── */
-        this.scoreText = this.add
-            .text(10, 10, `Score: ${this.score}`, { color: "#fff" })
-            .setScrollFactor(0); // カメラに影響されない
+        /* UI */
+        this.scoreText = this.add.text(10, 10, "Score: 0", { color: "#fff" });
         this.timerText = this.add
             .text(width - 10, 10, `Time: ${this.timeLeft}`, { color: "#fff" })
-            .setOrigin(1, 0)
-            .setScrollFactor(0);
+            .setOrigin(1, 0);
 
-        /* ──────────── ミニマップカメラ ───────────────────────── */
+        /* ミニマップカメラ */
         const miniW = 160,
             miniH = 240;
         this.miniCam = this.cameras.add(
@@ -131,216 +127,271 @@ export class Play extends Scene {
             miniW,
             miniH
         );
-        this.miniCam.setBackgroundColor("#9AD1FF"); // 水色枠
-        this.miniCam.ignore([this.scoreText, this.timerText]); // UI を除外
-        this.updateMiniCamZoom(); // 初回ズーム計算
+        this.miniCam.setBackgroundColor("#9AD1FF");
+        this.miniCam.ignore([this.scoreText, this.timerText]);
+        this.updateMiniCamZoom();
 
-        /* ──────────── 1 秒タイマー ▸ timeLeft-- / GameOver ------ */
+        /* カウントダウン */
         this.time.addEvent({
             delay: 1000,
             loop: true,
             callback: () => {
-                this.timeLeft--;
+                if (--this.timeLeft <= 0) this.gameOver();
                 this.timerText.setText(`Time: ${this.timeLeft}`);
-                if (this.timeLeft <= 0) this.gameOver();
             },
         });
 
-        /* ──────────── 入力イベント設定 ───────────────────────── */
-        this.input.mouse?.disableContextMenu(); // 右クリックメニュー抑止
+        /* 入力 */
+        this.input.mouse?.disableContextMenu();
+        this.registerInputHandlers();
 
-        // マウス移動 → current が static 状態のときのみ X 座標を追従
+        /* 周期イベント */
+        if (this.net?.isHost) {
+            this.time.addEvent({
+                delay: Play.SYNC_MS,
+                loop: true,
+                callback: () => this.broadcastAllPieces(),
+            });
+        } else if (!this.isOffline) {
+            this.time.addEvent({
+                delay: Play.SYNC_MS,
+                loop: true,
+                callback: () => this.sendCurrentPosition(),
+            });
+        }
+
+        /* 初回ピース */
+        if (this.isOffline || this.net?.isHost) this.spawnPiece("host");
+    }
+
+    /* ======================================================================
+     * 入力
+     * ==================================================================== */
+    private registerInputHandlers() {
         this.input.on(Input.Events.POINTER_MOVE, (p: Input.Pointer) => {
-            if (!this.input.enabled || !this.current) return;
-            this.current.x = Phaser.Math.Clamp(p.worldX, 48, width - 48);
+            if (!this.isMyTurn || !this.current) return;
+            const x = Phaser.Math.Clamp(p.worldX, 48, this.scale.width - 48);
+            this.current.x = x;
         });
 
-        // マウス離し：
-        //   右クリック：45° 回転
-        //   左クリック：ピースを drop（dynamic 化）して still 監視モード突入
         this.input.on(Input.Events.POINTER_UP, (p: Input.Pointer) => {
-            if (!this.current) return;
-            if (p.rightButtonReleased()) {
-                this.current.angle += 45; // 右クリック回転
+            if (!this.isMyTurn || !this.current) return;
+            p.rightButtonReleased() ? this.rotateCurrent() : this.dropCurrent();
+        });
+    }
+
+    private sendCurrentPosition() {
+        if (this.net?.isHost || !this.current || !this.isMyTurn) return;
+        this.net!.sendInput({ action: "move", x: this.current.x });
+    }
+
+    /* ======================================================================
+     * ピース生成 & 操作
+     * ==================================================================== */
+    private spawnPiece(turnOwner: PlayerSide) {
+        this.currentTurn = turnOwner;
+
+        const meta = gundams[Math.floor(Math.random() * gundams.length)];
+        const shapes = this.cache.json.get("shapes");
+
+        /* y を塔頂 - DROP_MARGIN に合わせ、必要ならワールド拡張 */
+        const towerTop = this.getTowerTopY();
+        const spawnY = towerTop - Play.DROP_MARGIN;
+        this.ensureWorldHeight(spawnY);
+
+        this.current = this.matter.add
+            .sprite(this.scale.width / 2, spawnY, meta.key, undefined, {
+                shape: shapes[meta.key],
+            })
+            .setScale(meta.scale)
+            .setStatic(true)
+            .setData("pid", `p${++this.pieceSeq}`)
+            .setData("gIdx", gundams.indexOf(meta));
+
+        /* カメラを追従 */
+        const targetY = towerTop - Play.TOP_OFFSET;
+        if (targetY < this.cameras.main.scrollY)
+            this.cameras.main.scrollY = targetY;
+    }
+
+    private rotateCurrent() {
+        if (!this.current) return;
+        this.current.angle += 45;
+        if (!this.net?.isHost) this.net!.sendInput({ action: "rotate" });
+    }
+
+    private dropCurrent() {
+        if (!this.current) return;
+        this.current.setStatic(false);
+        this.dropping = this.current;
+        this.current = undefined;
+        this.waitingForStill = true;
+        this.stillFrames = 0;
+        if (!this.net?.isHost) this.net!.sendInput({ action: "drop" });
+    }
+
+    /* ======================================================================
+     * クライアント入力 → ホスト適用
+     * ==================================================================== */
+    private applyRemoteInput(input: PieceInput) {
+        if (this.currentTurn !== "client" || !this.current) return;
+        if (input.action === "move" && typeof input.x === "number")
+            this.current.x = input.x;
+        else if (input.action === "rotate") this.current.angle += 45;
+        else if (input.action === "drop") this.dropCurrent();
+    }
+
+    /* ======================================================================
+     * ホスト → クライアント同期
+     * ==================================================================== */
+    private broadcastAllPieces() {
+        if (!this.net?.isHost) return;
+
+        const pieces: PieceSync[] = [];
+        const push = (s: Phaser.Physics.Matter.Image) =>
+            pieces.push({
+                id: s.getData("pid"),
+                g: s.getData("gIdx"),
+                x: Math.round(s.x),
+                y: Math.round(s.y),
+                angle: Math.round(s.angle),
+            });
+
+        this.settled.forEach(push);
+        if (this.current) push(this.current);
+        if (this.dropping) push(this.dropping);
+
+        this.net.sendSync({
+            turn: this.currentTurn,
+            pieces,
+            worldTop: this.worldTop,
+            worldHeight: this.worldHeight,
+        });
+    }
+
+    /* ======================================================================
+     * クライアント同期適用
+     * ==================================================================== */
+    private applySync(sync: SyncPayload) {
+        this.currentTurn = sync.turn;
+        this.input.enabled = this.isMyTurn;
+
+        /* ---------- ① ワールド境界をホスト値に強制合わせ ---------- */
+        /* 値を更新して物理 & カメラ両方を再設定 */
+        this.worldTop = sync.worldTop;
+        this.worldHeight = sync.worldHeight;
+
+        const towerTop = this.getTowerTopY();
+        const spawnY = towerTop - Play.DROP_MARGIN;
+        this.ensureWorldHeight(spawnY);
+        this.updateMiniCamZoom(); // ミニマップ再計算
+
+        sync.pieces.forEach((p) => {
+            const exists =
+                this.settled.get(p.id) ||
+                (this.current && this.current.getData("pid") === p.id
+                    ? this.current
+                    : undefined);
+            if (exists) {
+                exists.setPosition(p.x, p.y).setAngle(p.angle);
                 return;
             }
-            // --- Drop 開始 ---
-            this.current.setStatic(false).setFriction(0.8);
-            this.dropping = this.current;
-            this.current = undefined;
 
-            this.waitingForStill = true;
-            this.stillFrames = 0;
-            this.input.enabled = false; // 停止確定まで操作禁止
-            this.scoreText.setText(`Score: ${++this.score}`);
+            const meta = gundams[p.g];
+            const shapes = this.cache.json.get("shapes");
+            const s = this.matter.add
+                .sprite(p.x, p.y, meta.key, undefined, {
+                    shape: shapes[meta.key],
+                })
+                .setScale(meta.scale)
+                .setAngle(p.angle)
+                .setStatic(true)
+                .setData("pid", p.id)
+                .setData("gIdx", p.g);
+            this.settled.set(p.id, s);
+
+            if (this.isMyTurn && !this.current) this.current = s;
         });
-
-        /* ──────────── 最初のピースを出現 ─────────────────────── */
-        this.spawnPiece();
-        EventBus.emit("scene-ready", this); // 開発デバッグ用
     }
 
-    /* ====================================================================== *
-     *  spawnPiece() : 塔の一番上 + DROP_MARGIN に current ピースを生成
+    /* ======================================================================
+     * update – 静止判定 & タワー崩落
      * ==================================================================== */
-    private spawnPiece() {
-        /* 1) スポーン位置を決定（x は中央固定、y は塔頂 -120px） */
-        const meta = gundams[Math.floor(Math.random() * gundams.length)];
-        const x = this.scale.width / 2;
-        const towerTop = this.getTowerTopY();
-        const y = towerTop - Play.DROP_MARGIN;
+    update() {
+        /* 静止判定（ホストのみ） */
+        if (this.net?.isHost && this.waitingForStill && this.dropping) {
+            const { speed, angularSpeed } = this.dropping
+                .body as MatterJS.BodyType;
+            speed < Play.SPEED_TH && angularSpeed < Play.SPEED_TH
+                ? this.stillFrames++
+                : (this.stillFrames = 0);
 
-        /* 2) y がワールド上端を突き抜けそうなら世界を延長する */
-        this.ensureWorldHeight(y);
-
-        /* 3) ピース生成（Matter + 複雑ポリゴン shape） */
-        const shapes = this.cache.json.get("shapes");
-        this.current = this.matter.add
-            .sprite(x, y, meta.key, undefined, { shape: shapes[meta.key] })
-            .setScale(meta.scale)
-            .setFriction(meta.friction)
-            .setBounce(meta.bounce)
-            .setMass(meta.mass)
-            .setStatic(true); // 空中で静止待機
-
-        /* 4) 生成直後、必要ならメインカメラを上へジャンプさせる */
-        const targetY = towerTop - Play.TOP_OFFSET;
-        if (targetY < this.cameras.main.scrollY) {
-            this.cameras.main.scrollY = targetY;
-        }
-    }
-
-    /* ====================================================================== *
-     *  update() : 毎フレーム呼ばれるメインループ
-     * ==================================================================== */
-    update(): void {
-        /* 1) GameOver 判定 – ブロックが画面下 +80px を超えたら終了 */
-        const toWatch = this.waitingForStill
-            ? [...this.settled, ...(this.dropping ? [this.dropping] : [])]
-            : this.settled;
-        if (toWatch.some((p) => p.y > this.scale.height + 80)) {
-            this.gameOver();
-            return;
-        }
-
-        /* 2) “全ピース静止” を監視。NEED_STILL フレーム連続静止で確定 */
-        if (this.waitingForStill) {
-            const all = [
-                ...this.settled,
-                ...(this.dropping ? [this.dropping] : []),
-            ];
-            const moving = all.some((p) => {
-                const b = p.body as MatterJS.BodyType;
-                return (
-                    b.speed >= Play.MAX_SPEED || b.angularSpeed >= Play.MAX_ANG
-                );
-            });
-            if (moving) this.stillFrames = 0;
-            else if (++this.stillFrames >= Play.NEED_STILL) {
-                if (this.dropping) {
-                    this.settled.push(this.dropping);
-                    this.dropping = undefined;
-                }
+            if (this.stillFrames >= Play.STILL_NEED) {
+                this.dropping.setStatic(true);
+                this.settled.set(this.dropping.getData("pid"), this.dropping);
+                this.dropping = undefined;
                 this.waitingForStill = false;
-                this.input.enabled = true;
-                if (this.timeLeft > 0) this.spawnPiece();
+
+                /* ターン交代 & 新ピース */
+                this.currentTurn =
+                    this.currentTurn === "host" ? "client" : "host";
+                this.spawnPiece(this.currentTurn);
+                this.broadcastAllPieces();
             }
         }
 
-        /* 3) カメラ X を常に画面中央に合わせる（幅が広いため） */
+        /* カメラ中央寄せ (X) */
         this.cameras.main.scrollX =
             -(this.cameras.main.width - this.scale.width) / 2;
+
+        /* タワー崩落検知 */
+        for (const [, s] of this.settled)
+            if (s.y > this.scale.height + 200) {
+                this.gameOver();
+                break;
+            }
     }
 
-    /* ====================================================================== *
-     *  gameOver() : ピース落下 or タイムアップで呼ばれるリセット処理
+    /* ======================================================================
+     * Utility – ワールド拡張 / ミニマップ
      * ==================================================================== */
-    private gameOver() {
-        /* ① GameOver シーンへスコアを渡して遷移 */
-        this.scene.start("GameOver", { score: this.score });
-
-        /* ② すべての GameObject を安全に破棄 */
-        this.current?.destroy();
-        this.dropping?.destroy();
-        this.settled.forEach((p) => p.destroy());
-        this.settled = [];
-
-        /* ③ 変数を初期値に戻す（同 Scene 再利用を想定） */
-        this.current = this.dropping = undefined;
-        this.stillFrames = 0;
-        this.waitingForStill = false;
-        this.score = 0;
-        this.timeLeft = 600;
-
-        /* ④ ワールド & カメラ境界を元のサイズへリセット */
-        const { width, height } = this.scale;
-        this.worldTop = 0;
-        this.worldHeight = height;
-        this.matter.world.setBounds(
-            0,
-            0,
-            width,
-            height,
-            64,
-            false,
-            false,
-            false,
-            false
-        );
-        this.cameras.main.setBounds(0, 0, width, height);
-        this.cameras.main.scrollY = 0;
-        this.updateMiniCamZoom(); // ミニマップ再計算
-    }
-
-    /* ====================================================================== *
-     *  Utility 関数
-     * ==================================================================== */
-
-    /** 塔（＋土台）の最上端 y を取得（値が小さいほど高い）*/
     private getTowerTopY(): number {
         let minY = this.groundTop;
-        [...this.settled, ...(this.dropping ? [this.dropping] : [])].forEach(
-            (p) => {
-                minY = Math.min(minY, p.getBounds().top);
-            }
-        );
+        this.settled.forEach((p) => (minY = Math.min(minY, p.getBounds().top)));
+        if (this.current) minY = Math.min(minY, this.current.getBounds().top);
         return minY;
     }
 
-    /** spawnY が上端 +100px を越えたら EXTEND_Y ずつワールドを延長 */
     private ensureWorldHeight(spawnY: number) {
         while (spawnY < this.worldTop + 100) {
             this.worldTop -= Play.EXTEND_Y;
             this.worldHeight += Play.EXTEND_Y;
 
             const w = this.scale.width;
-            // 物理 & カメラ境界を同時に更新（上方向だけ伸ばす）
-            this.matter.world.setBounds(
-                0,
-                this.worldTop,
-                w,
-                this.worldHeight,
-                64,
-                false,
-                false,
-                false,
-                false
-            );
+            this.matter.world.setBounds(0, this.worldTop, w, this.worldHeight);
             this.cameras.main.setBounds(0, this.worldTop, w, this.worldHeight);
             this.updateMiniCamZoom();
         }
     }
 
-    /** ミニマップのズーム & 位置を“ワールド中央”へ合わせ直す */
     private updateMiniCamZoom() {
-        // ズーム = カメラ枠 / ワールドサイズ（入る方の倍率を採用）
         const zoomX = this.miniCam.width / this.scale.width;
         const zoomY = this.miniCam.height / this.worldHeight;
         this.miniCam.setZoom(Math.min(zoomX, zoomY));
 
-        // 中央位置を算出して centerOn
         const centerX = this.scale.width / 2;
         const centerY = this.worldTop + this.worldHeight / 2;
         this.miniCam.centerOn(centerX, centerY);
+    }
+
+    /* ======================================================================
+     * gameOver
+     * ==================================================================== */
+    private gameOver() {
+        if (this.net?.isHost)
+            this.net.sendResult(
+                this.currentTurn === "host" ? "client" : "host"
+            );
+        this.scene.start("GameOver", { score: this.score });
     }
 }

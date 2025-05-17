@@ -23,6 +23,7 @@ import { Boot } from "./scenes/Boot"; // アセットパス登録など
 import { Preloader } from "./scenes/Preloader"; // 画像／JSON ロード
 import { Play } from "./scenes/Play"; // ゲーム本編
 import { GameOver } from "./scenes/GameOver"; // リザルト画面
+import { Lobby } from "./scenes/Lobby";
 
 /* --- Phaser GameConfig ------------------------------------------------ *
  *  公式 API : https://newdocs.phaser.io/docs/3.55.2/Phaser.Types.Core.GameConfig
@@ -43,8 +44,10 @@ const config: Phaser.Types.Core.GameConfig = {
     backgroundColor: "#80c6ff", // 空色
 
     /* 有効化する Scene 順序（配列の先頭から順に起動される）-------------- */
-    scene: [Boot, Preloader, Play, GameOver],
+    scene: [Boot, Preloader, Lobby, Play, GameOver],
 
+    dom: { createContainer: true },
+    
     /* 物理エンジン設定 -------------------------------------------------- */
     physics: {
         default: "matter", // Matter.js を採用

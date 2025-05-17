@@ -76,6 +76,6 @@ export class Preloader extends Scene {
         this.load.off("progress");
 
         /* --- 2. 次シーンへ遷移（Boot.ts で指定されている “Play” へ） ------ */
-        this.scene.start("Play");
+        this.scene.start("Lobby");
     }
 }
