@@ -6,19 +6,28 @@ import {
     TrysteroNetwork,
 } from "../../network/trysteroConnection";
 
-/* 6 桁ランダム英数字 */
+/* ------------------------------------------------------------------
+ * 6 桁のランダム英数字を生成するユーティリティ
+ * ------------------------------------------------------------------ */
 const genRoomId = () =>
     Math.random().toString(36).substring(2, 8).toUpperCase();
 
+/**
+ * Lobby シーン — オンライン対戦部屋の作成・参加を行う
+ */
 export class Lobby extends Scene {
     private roomId = genRoomId();
     private inputField?: HTMLInputElement;
     private hostNet?: TrysteroNetwork;
 
     constructor() {
+        // シーンキー "Lobby" を指定して親クラス初期化
         super("Lobby");
     }
 
+    /**
+     * create() — UI の生成とボタンイベント登録
+     */
     create() {
         EventBus.emit("current-scene-ready", this);
         const { width } = this.scale;
@@ -62,9 +71,9 @@ export class Lobby extends Scene {
             .on("pointerup", () => this.onJoin());
     }
 
-    /* ---------------------------------------------------------------------- *
-     * Create Room を押したとき
-     * -------------------------------------------------------------------- */
+    /* ------------------------------------------------------------------
+     * onCreate() — 部屋作成ボタン押下時の処理
+     * ------------------------------------------------------------------ */
     private onCreate(cx: number) {
         /* 部屋を生成して待機 */
         this.roomId = genRoomId();
@@ -123,9 +132,9 @@ export class Lobby extends Scene {
         });
     }
 
-    /* ---------------------------------------------------------------------- *
-     * Join ボタン
-     * -------------------------------------------------------------------- */
+    /* ------------------------------------------------------------------
+     * onJoin() — 入力された部屋IDで Play シーンへ移動
+     * ------------------------------------------------------------------ */
     private onJoin() {
         const id = (this.inputField?.value ?? "").trim().toUpperCase();
         if (/^[A-Z0-9]{6}$/.test(id)) {
