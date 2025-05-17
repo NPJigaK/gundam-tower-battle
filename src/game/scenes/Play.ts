@@ -433,6 +433,6 @@ export class Play extends Scene {
         const winner: GameResult =
             this.currentTurn === "host" ? "client" : "host";
         if (this.net?.isHost) this.net.sendResult(winner);
-        this.scene.start("GameOver", { score: this.score, winner });
+        this.scene.start("GameOver", { score: this.score, winner, net: this.net });
     }
 }

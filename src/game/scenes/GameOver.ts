@@ -8,7 +8,8 @@
 
 import { Scene } from "phaser"; // Phaser の基本クラス群
 import { EventBus } from "../EventBus"; // シーン切り替え通知用の簡易イベントバス
-import type { GameResult } from "../../types";
+import type { GameResult, RematchDecision } from "../../types";
+import type { TrysteroNetwork } from "../../network/trysteroConnection";
 
 export class GameOver extends Scene {
     /* ──────────────────────────── フィールド ─────────────────────────── */
@@ -16,6 +17,12 @@ export class GameOver extends Scene {
     private finalScore: number = 0;
     /** 勝者 (host/client/draw) */
     private winner?: GameResult;
+    /** ネットワーク */
+    private net?: TrysteroNetwork;
+    /** 自分の決定 */
+    private myDecision?: RematchDecision;
+    /** 相手の決定 */
+    private oppDecision?: RematchDecision;
 
     /* ──────────────────────────── コンストラクタ ──────────────────────── */
     constructor() {
@@ -31,6 +38,7 @@ export class GameOver extends Scene {
         // Play シーンで渡されたスコアがあれば保持（安全に 0 初期化も兼ねる）
         this.finalScore = data.score || 0;
         this.winner = data.winner;
+        this.net = data.net;
     }
 
     /* =====================================================================
@@ -70,22 +78,63 @@ export class GameOver extends Scene {
             })
             .setOrigin(0.5);
 
-        /* ------- Restart ボタン（テキストをボタン代わりに） -------------- */
-        const restartText = this.add
-            .text(centerX, centerY + 80, "Restart", {
+        /* ------- リマッチ / ロビー ボタン ------------------------------ */
+        const rematchText = this.add
+            .text(centerX - 80, centerY + 80, "Rematch", {
                 font: "28px Arial",
                 color: "#ffff00",
             })
             .setOrigin(0.5)
-            .setInteractive(); // ポインタ入力を有効化（ボタン化）
+            .setInteractive();
 
-        /* クリック / タップで Play シーンを再起動 */
-        restartText.on("pointerup", () => {
-            this.scene.start("Play"); // 新規に Play シーンを作成して遷移
-        });
+        const lobbyText = this.add
+            .text(centerX + 80, centerY + 80, "Lobby", {
+                font: "28px Arial",
+                color: "#ffff00",
+            })
+            .setOrigin(0.5)
+            .setInteractive();
+
+        rematchText.on("pointerup", () => this.choose("rematch"));
+        lobbyText.on("pointerup", () => this.choose("quit"));
+
+        if (this.net) {
+            this.net.onRematch((d) => {
+                this.oppDecision = d;
+                this.checkDecision();
+            });
+        }
 
         /* ------- React 側へ “シーン準備完了” を通知 ---------------------- */
         EventBus.emit("current-scene-ready", this);
+    }
+
+    private choose(d: RematchDecision) {
+        if (this.myDecision) return;
+        this.myDecision = d;
+        if (this.net) this.net.sendRematch(d);
+        this.checkDecision();
+    }
+
+    private checkDecision() {
+        if (!this.myDecision) return;
+
+        if (this.net) {
+            if (!this.oppDecision) return;
+            if (this.myDecision === "rematch" && this.oppDecision === "rematch") {
+                this.scene.start("Play", { roomId: this.net.roomId, isHost: this.net.isHost, net: this.net });
+            } else {
+                this.net.room.leave();
+                this.scene.start("Lobby");
+            }
+        } else {
+            // オフライン時
+            if (this.myDecision === "rematch") {
+                this.scene.start("Play");
+            } else {
+                this.scene.start("Lobby");
+            }
+        }
     }
 }
 
