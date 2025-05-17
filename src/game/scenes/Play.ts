@@ -175,9 +175,9 @@ export class Play extends Scene {
         if (this.isOffline || this.net?.isHost) this.spawnPiece("host");
     }
 
-    /* ======================================================================
-     * 入力
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * registerInputHandlers() — マウス操作のイベント登録
+     * ------------------------------------------------------------------ */
     private registerInputHandlers() {
         this.input.on(Input.Events.POINTER_MOVE, (p: Input.Pointer) => {
             if (!this.isMyTurn || !this.current) return;
@@ -191,14 +191,17 @@ export class Play extends Scene {
         });
     }
 
+    /**
+     * sendCurrentPosition() — クライアント側から現在位置を送信
+     */
     private sendCurrentPosition() {
         if (this.net?.isHost || !this.current || !this.isMyTurn) return;
         this.net!.sendInput({ action: "move", x: this.current.x });
     }
 
-    /* ======================================================================
-     * ピース生成 & 操作
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * spawnPiece() — 新しいブロック(機体)を出現させる
+     * ------------------------------------------------------------------ */
     private spawnPiece(turnOwner: PlayerSide) {
         this.currentTurn = turnOwner;
 
@@ -225,12 +228,14 @@ export class Play extends Scene {
             this.cameras.main.scrollY = targetY;
     }
 
+    /** 現在操作中のピースを 45 度回転 */
     private rotateCurrent() {
         if (!this.current) return;
         this.current.angle += 45;
         if (!this.net?.isHost) this.net!.sendInput({ action: "rotate" });
     }
 
+    /** 現在操作中のピースを落下させる */
     private dropCurrent() {
         if (!this.current) return;
         this.current.setStatic(false);
@@ -241,9 +246,9 @@ export class Play extends Scene {
         if (!this.net?.isHost) this.net!.sendInput({ action: "drop" });
     }
 
-    /* ======================================================================
-     * クライアント入力 → ホスト適用
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * applyRemoteInput() — クライアントから届いた操作を適用
+     * ------------------------------------------------------------------ */
     private applyRemoteInput(input: PieceInput) {
         if (this.currentTurn !== "client" || !this.current) return;
         if (input.action === "move" && typeof input.x === "number")
@@ -252,9 +257,9 @@ export class Play extends Scene {
         else if (input.action === "drop") this.dropCurrent();
     }
 
-    /* ======================================================================
-     * ホスト → クライアント同期
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * broadcastAllPieces() — ホスト側の状態を全クライアントへ送信
+     * ------------------------------------------------------------------ */
     private broadcastAllPieces() {
         if (!this.net?.isHost) return;
 
@@ -281,9 +286,9 @@ export class Play extends Scene {
         });
     }
 
-    /* ======================================================================
-     * クライアント同期適用
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * applySync() — ホストから受け取った全ピース情報を反映
+     * ------------------------------------------------------------------ */
     private applySync(sync: SyncPayload) {
         this.currentTurn = sync.turn;
         this.input.enabled = this.isMyTurn;
@@ -327,9 +332,11 @@ export class Play extends Scene {
         });
     }
 
-    /* ======================================================================
-     * update – 静止判定 & タワー崩落
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * update() — 毎フレーム呼ばれるゲームループ
+     *  - ピースの静止判定
+     *  - タワー崩落チェック
+     * ------------------------------------------------------------------ */
     update() {
         /* 静止判定（ホストのみ） */
         if (this.net?.isHost && this.waitingForStill && this.dropping) {
@@ -370,9 +377,9 @@ export class Play extends Scene {
             }
     }
 
-    /* ======================================================================
-     * Utility – ワールド拡張 / ミニマップ
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * getTowerTopY() — 現在の塔の最上部Y座標を取得
+     * ------------------------------------------------------------------ */
     private getTowerTopY(): number {
         let minY = this.groundTop;
         this.settled.forEach((p) => (minY = Math.min(minY, p.getBounds().top)));
@@ -380,6 +387,7 @@ export class Play extends Scene {
         return minY;
     }
 
+    /** ワールド上端を必要に応じて拡張 */
     private ensureWorldHeight(spawnY: number) {
         while (spawnY < this.worldTop + 100) {
             this.worldTop -= Play.EXTEND_Y;
@@ -402,6 +410,7 @@ export class Play extends Scene {
         }
     }
 
+    /** ミニマップのズーム量を再計算 */
     private updateMiniCamZoom() {
         const zoomX = this.miniCam.width / this.scale.width;
         const zoomY = this.miniCam.height / this.worldHeight;
@@ -412,9 +421,9 @@ export class Play extends Scene {
         this.miniCam.centerOn(centerX, centerY);
     }
 
-    /* ======================================================================
-     * gameOver
-     * ==================================================================== */
+    /* ------------------------------------------------------------------
+     * gameOver() — ゲーム終了処理
+     * ------------------------------------------------------------------ */
     private gameOver() {
         if (this.net?.isHost)
             this.net.sendResult(
