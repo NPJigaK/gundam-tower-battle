@@ -8,11 +8,14 @@
 
 import { Scene } from "phaser"; // Phaser の基本クラス群
 import { EventBus } from "../EventBus"; // シーン切り替え通知用の簡易イベントバス
+import type { GameResult } from "../../types";
 
 export class GameOver extends Scene {
     /* ──────────────────────────── フィールド ─────────────────────────── */
     /** Play シーンから受け取った最終スコア。init() でセットされる */
     private finalScore: number = 0;
+    /** 勝者 (host/client/draw) */
+    private winner?: GameResult;
 
     /* ──────────────────────────── コンストラクタ ──────────────────────── */
     constructor() {
@@ -27,6 +30,7 @@ export class GameOver extends Scene {
     init(data: any): void {
         // Play シーンで渡されたスコアがあれば保持（安全に 0 初期化も兼ねる）
         this.finalScore = data.score || 0;
+        this.winner = data.winner;
     }
 
     /* =====================================================================
@@ -42,11 +46,21 @@ export class GameOver extends Scene {
 
         /* ------- 「Game Over」タイトル ------------------------------------ */
         this.add
-            .text(centerX, centerY - 50, "Game Over", {
+            .text(centerX, centerY - 80, "Game Over", {
                 font: "48px Arial",
                 color: "#ffffff",
             })
             .setOrigin(0.5); // 文字列中央を基準点にする
+
+        /* ------- 勝者表示 ---------------------------------------------- */
+        if (this.winner) {
+            this.add
+                .text(centerX, centerY - 40, `Winner: ${this.winner}`, {
+                    font: "32px Arial",
+                    color: "#ffffff",
+                })
+                .setOrigin(0.5);
+        }
 
         /* ------- 最終スコア --------------------------------------------- */
         this.add
