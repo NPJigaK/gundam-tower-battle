@@ -17,6 +17,7 @@
  * ======================================================================= */
 
 import { Game } from "phaser";
+import RexUIPlugin from "phaser3-rex-plugins/templates/ui/ui-plugin.js";
 
 /* --- ゲームを構成する Scene クラス群を import --------------------- */
 import { Boot } from "./scenes/Boot"; // アセットパス登録など
@@ -47,7 +48,7 @@ const config: Phaser.Types.Core.GameConfig = {
     scene: [Boot, Preloader, Lobby, Play, GameOver],
 
     dom: { createContainer: true },
-    
+
     /* 物理エンジン設定 -------------------------------------------------- */
     physics: {
         default: "matter", // Matter.js を採用
@@ -55,6 +56,16 @@ const config: Phaser.Types.Core.GameConfig = {
             gravity: { x: 0, y: 1000 }, // y 正方向が下へ 1000 px/s²
             debug: true,
         },
+    },
+
+    plugins: {
+        scene: [
+            {
+                key: "rexUI",
+                plugin: RexUIPlugin,
+                mapping: "rexUI",
+            },
+        ],
     },
 };
 

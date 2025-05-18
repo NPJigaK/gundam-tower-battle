@@ -1,3 +1,11 @@
+import "phaser";
+import RexUIPlugin from "phaser3-rex-plugins/templates/ui/ui-plugin.js";
+declare module "phaser" {
+    interface Scene {
+        rexUI: RexUIPlugin;
+    }
+}
+
 /* =============================================================================
  *  共通型定義 – 50 ms 高頻度同期仕様
  * ========================================================================== */

@@ -5,6 +5,7 @@ import {
     createTrysteroNetwork,
     TrysteroNetwork,
 } from "../../network/trysteroConnection";
+import { TextArea } from 'phaser3-rex-plugins/templates/ui/ui-components';
 
 /* ------------------------------------------------------------------
  * 6 桁のランダム英数字を生成するユーティリティ
@@ -34,12 +35,22 @@ export class Lobby extends Scene {
         const cx = width / 2;
 
         /* タイトル */
-        this.add
-            .text(cx, 100, "Gundam Tower Battle – Lobby", {
-                font: "28px Arial",
-                color: "#fff",
-            })
-            .setOrigin(0.5);
+        this.rexUI.add.label({
+            x: cx,
+            y: 100,
+            text: this.add.text(0, 0, "Gundam Tower Battle – Lobby", {
+                fontSize: '28px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+            }),
+            align: 'center',    // 中央揃え
+            space: {
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0
+            }
+        }).setOrigin(0.5);
 
         /* ============= ① Create Room ============= */
         this.add
