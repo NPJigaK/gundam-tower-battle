@@ -492,7 +492,18 @@ export class Play extends Scene {
             })
             .setOrigin(0.5)
             .setInteractive({ useHandCursor: true })
-            .on("pointerup", () => this.requestRematch());
+            .on(
+                "pointerup",
+                (
+                    pointer: Phaser.Input.Pointer,
+                    _x: number,
+                    _y: number,
+                    event: Phaser.Types.Input.EventData,
+                ) => {
+                    event.stopPropagation();
+                    this.requestRematch();
+                },
+            );
 
         container.add(rematchBtn);
 
