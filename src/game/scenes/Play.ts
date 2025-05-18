@@ -21,12 +21,17 @@ import type {
     GameResult,
     PlayerSide,
     SyncPayload,
+    NetCommand,
 } from "../../types";
 
 export class Play extends Scene {
     /* ── ネットワーク related ─────────────────────────────────────────── */
     private net?: TrysteroNetwork;
     private isOffline = true;
+    private roomId?: string;
+    private rematchHost = false;
+    private rematchClient = false;
+    private overlay?: Phaser.GameObjects.Container;
 
     /* ── ターン制 ─────────────────────────────────────────────────────── */
     private currentTurn: PlayerSide = "host";
@@ -77,17 +82,21 @@ export class Play extends Scene {
      * ==================================================================== */
     init(data: { roomId?: string; isHost?: boolean; net?: TrysteroNetwork }) {
         if (data.roomId) {
+            this.roomId = data.roomId;
+            const isNewNet = !data.net;
             this.net =
                 data.net ?? createTrysteroNetwork(data.roomId, !!data.isHost);
             this.isOffline = false;
 
-            if (this.net.isHost) {
-                this.net.onInput((input) => this.applyRemoteInput(input));
-            } else {
-                this.net.onSync((sync) => this.applySync(sync));
-                this.net.onResult((r) =>
-                    this.scene.start("GameOver", { winner: r })
-                );
+            if (isNewNet) {
+                if (this.net.isHost) {
+                    this.net.onInput((input) => this.applyRemoteInput(input));
+                } else {
+                    this.net.onSync((sync) => this.applySync(sync));
+                }
+
+                this.net.onResult((r) => this.showGameOver(r));
+                this.net.onCommand((c) => this.handleCommand(c));
             }
         }
     }
@@ -96,6 +105,13 @@ export class Play extends Scene {
      * create
      * ==================================================================== */
     create() {
+        this.overlay?.destroy(true);
+        this.overlay = undefined;
+        this.rematchHost = false;
+        this.rematchClient = false;
+
+        this.resetState();
+
         const { width, height } = this.scale;
         this.worldHeight = height;
 
@@ -433,6 +449,130 @@ export class Play extends Scene {
         const winner: GameResult =
             this.currentTurn === "host" ? "client" : "host";
         if (this.net?.isHost) this.net.sendResult(winner);
-        this.scene.start("GameOver", { score: this.score, winner });
+        this.showGameOver(winner);
+    }
+
+    /** 結果表示と選択肢 */
+    private showGameOver(winner: GameResult) {
+        if (this.overlay) return;
+        const { width, height } = this.scale;
+        this.overlay = this.add.container(0, 0);
+
+        const bg = this.add
+            .rectangle(0, 0, width, height, 0x000000, 0.7)
+            .setOrigin(0);
+        const title = this.add
+            .text(width / 2, height / 2 - 80, "Game Over", {
+                font: "48px Arial",
+                color: "#ffffff",
+            })
+            .setOrigin(0.5);
+        const winnerText = this.add
+            .text(width / 2, height / 2 - 40, `Winner: ${winner}`, {
+                font: "32px Arial",
+                color: "#ffffff",
+            })
+            .setOrigin(0.5);
+
+        const rematchBtn = this.add
+            .text(width / 2, height / 2 + 20, "Rematch", {
+                font: "28px Arial",
+                color: "#ffff00",
+            })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .on("pointerup", () => this.requestRematch());
+
+        const lobbyBtn = this.add
+            .text(width / 2, height / 2 + 60, "Lobby", {
+                font: "28px Arial",
+                color: "#ffff00",
+            })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .on("pointerup", () => this.gotoLobby());
+
+        this.overlay.add([bg, title, winnerText, rematchBtn, lobbyBtn]);
+    }
+
+    private requestRematch() {
+        if (this.net) {
+            if (this.net.isHost) {
+                this.rematchHost = true;
+                this.net.sendCommand("rematch");
+                if (this.rematchClient) this.startRematch();
+            } else {
+                this.rematchClient = true;
+                this.net.sendCommand("rematch");
+            }
+        } else {
+            this.scene.restart();
+        }
+    }
+
+    private gotoLobby() {
+        if (this.net) this.net.sendCommand("lobby");
+        this.resetState();
+        this.scene.start("Lobby");
+    }
+
+    private handleCommand(cmd: NetCommand) {
+        if (cmd === "rematch") {
+            if (this.net?.isHost) {
+                this.rematchClient = true;
+                if (this.rematchHost) this.startRematch();
+            } else {
+                this.rematchHost = true;
+            }
+        } else if (cmd === "restart") {
+            this.startRematchLocal();
+        } else if (cmd === "lobby") {
+            this.scene.start("Lobby");
+        }
+    }
+
+    private startRematch() {
+        this.net?.sendCommand("restart");
+        this.startRematchLocal();
+    }
+
+    /** 盤面と状態を初期化 */
+    private resetState() {
+        this.current?.destroy();
+        this.dropping?.destroy();
+        this.settled.forEach((p) => p.destroy());
+        this.settled.clear();
+
+        this.current = this.dropping = undefined;
+        this.stillFrames = 0;
+        this.waitingForStill = false;
+        this.pieceSeq = 0;
+        this.score = 0;
+        this.timeLeft = 600;
+
+        const { width, height } = this.scale;
+        this.worldTop = 0;
+        this.worldHeight = height;
+        this.matter.world.setBounds(
+            0,
+            0,
+            width,
+            height,
+            64,
+            false,
+            false,
+            false,
+            false,
+        );
+        this.cameras.main.setBounds(0, 0, width, height);
+        this.cameras.main.scrollY = 0;
+        if (this.miniCam) this.updateMiniCamZoom();
+    }
+
+    private startRematchLocal() {
+        this.overlay?.destroy(true);
+        this.overlay = undefined;
+        this.resetState();
+        this.scene.restart({ roomId: this.roomId, isHost: this.net?.isHost, net: this.net });
     }
 }
