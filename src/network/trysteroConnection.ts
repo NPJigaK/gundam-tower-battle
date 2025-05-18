@@ -20,11 +20,13 @@ export interface TrysteroNetwork {
   sendInput: (input: PieceInput) => void;
   sendSync: (sync: SyncPayload) => void;
   sendResult: (result: GameResult) => void;
+  sendRematch: () => void;
 
   /* 受信ハンドラ登録 — onXXX(cb) 形式でリスナを追加 */
   onInput: (cb: (input: PieceInput) => void) => void;
   onSync:  (cb: (sync: SyncPayload) => void) => void;
   onResult: (cb: (result: GameResult) => void) => void;
+  onRematch: (cb: () => void) => void;
 }
 
 export function createTrysteroNetwork(
@@ -38,6 +40,7 @@ export function createTrysteroNetwork(
   const [sendInput, onInput] = room.makeAction<PieceInput>("input");
   const [sendSync, onSync] = room.makeAction<SyncPayload>("sync");
   const [sendResult, onResult] = room.makeAction<GameResult>("result");
+  const [sendRematchRaw, onRematch] = room.makeAction<null>("rematch");
 
   return {
     isHost,
@@ -45,8 +48,10 @@ export function createTrysteroNetwork(
     sendInput,
     sendSync,
     sendResult,
+    sendRematch: () => sendRematchRaw(null),
     onInput,
     onSync,
     onResult,
+    onRematch,
   };
 }

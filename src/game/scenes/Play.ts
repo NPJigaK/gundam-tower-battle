@@ -61,6 +61,12 @@ export class Play extends Scene {
     private groundTop = 0; // 土台上面 y
     private miniCam!: Phaser.Cameras.Scene2D.Camera;
 
+    /* ── GameOver / Rematch state ─────────────────────────────────────── */
+    private isGameOver = false;
+    private rematchRequested = false;
+    private remoteRematch = false;
+    private overlay?: Phaser.GameObjects.Container;
+
     /* ── 定数 (旧シングル版を踏襲) ───────────────────────────────────── */
     private static readonly SYNC_MS = 50;
     private static readonly DROP_MARGIN = 120;
@@ -85,10 +91,12 @@ export class Play extends Scene {
                 this.net.onInput((input) => this.applyRemoteInput(input));
             } else {
                 this.net.onSync((sync) => this.applySync(sync));
-                this.net.onResult((r) =>
-                    this.scene.start("GameOver", { winner: r })
-                );
+                this.net.onResult((r) => this.showGameOver(r));
             }
+            this.net.onRematch(() => {
+                this.remoteRematch = true;
+                this.checkRematchReady();
+            });
         }
     }
 
@@ -147,8 +155,10 @@ export class Play extends Scene {
             delay: 1000,
             loop: true,
             callback: () => {
-                if (--this.timeLeft <= 0) this.gameOver();
-                this.timerText.setText(`Time: ${this.timeLeft}`);
+                if (!this.isGameOver) {
+                    if (--this.timeLeft <= 0) this.gameOver();
+                    this.timerText.setText(`Time: ${this.timeLeft}`);
+                }
             },
         });
 
@@ -195,7 +205,7 @@ export class Play extends Scene {
      * sendCurrentPosition() — クライアント側から現在位置を送信
      */
     private sendCurrentPosition() {
-        if (this.net?.isHost || !this.current || !this.isMyTurn) return;
+        if (this.isGameOver || this.net?.isHost || !this.current || !this.isMyTurn) return;
         this.net!.sendInput({ action: "move", x: this.current.x });
     }
 
@@ -253,7 +263,8 @@ export class Play extends Scene {
      * applyRemoteInput() — クライアントから届いた操作を適用
      * ------------------------------------------------------------------ */
     private applyRemoteInput(input: PieceInput) {
-        if (this.currentTurn !== "client" || !this.current) return;
+        if (this.isGameOver || this.currentTurn !== "client" || !this.current)
+            return;
         if (input.action === "move" && typeof input.x === "number")
             this.current.x = input.x;
         else if (input.action === "rotate") this.current.angle += 45;
@@ -264,7 +275,7 @@ export class Play extends Scene {
      * broadcastAllPieces() — ホスト側の状態を全クライアントへ送信
      * ------------------------------------------------------------------ */
     private broadcastAllPieces() {
-        if (!this.net?.isHost) return;
+        if (this.isGameOver || !this.net?.isHost) return;
 
         const pieces: PieceSync[] = [];
         const push = (s: Phaser.Physics.Matter.Image) =>
@@ -344,6 +355,7 @@ export class Play extends Scene {
      *  - タワー崩落チェック
      * ------------------------------------------------------------------ */
     update() {
+        if (this.isGameOver) return;
         /* 静止判定（ホストのみ） */
         if (this.net?.isHost && this.waitingForStill && this.dropping) {
             const { speed, angularSpeed } = this.dropping
@@ -433,6 +445,102 @@ export class Play extends Scene {
         const winner: GameResult =
             this.currentTurn === "host" ? "client" : "host";
         if (this.net?.isHost) this.net.sendResult(winner);
-        this.scene.start("GameOver", { score: this.score, winner });
+        this.showGameOver(winner);
+    }
+
+    /** overlay 表示 */
+    private showGameOver(winner: GameResult) {
+        if (this.isGameOver) return;
+        this.isGameOver = true;
+        this.input.enabled = false;
+
+        const cx = this.scale.width / 2;
+        const cy = this.scale.height / 2;
+
+        const container = this.add.container(0, 0);
+        container.add(
+            this.add.rectangle(cx, cy, 300, 200, 0x000000, 0.6)
+        );
+        container.add(
+            this.add
+                .text(cx, cy - 40, "Game Over", {
+                    font: "32px Arial",
+                    color: "#ffffff",
+                })
+                .setOrigin(0.5)
+        );
+        container.add(
+            this.add
+                .text(cx, cy - 10, `Winner: ${winner}`, {
+                    font: "24px Arial",
+                    color: "#ffffff",
+                })
+                .setOrigin(0.5)
+        );
+
+        const rematchBtn = this.add
+            .text(cx, cy + 40, "Rematch", {
+                font: "28px Arial",
+                color: "#ffff00",
+                backgroundColor: "#444",
+                padding: { left: 12, right: 12, top: 4, bottom: 4 },
+            })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .on("pointerup", () => this.requestRematch());
+
+        container.add(rematchBtn);
+        this.miniCam.ignore(container.list);
+
+        this.overlay = container;
+    }
+
+    /** Rematch ボタンを押したとき */
+    private requestRematch() {
+        if (this.rematchRequested) return;
+        this.rematchRequested = true;
+        if (!this.isOffline) this.net?.sendRematch();
+        this.checkRematchReady();
+    }
+
+    private checkRematchReady() {
+        if (this.rematchRequested && (this.isOffline || this.remoteRematch)) {
+            this.resetGame();
+        }
+    }
+
+    /** ボードリセット */
+    private resetGame() {
+        this.overlay?.destroy();
+        this.overlay = undefined;
+
+        this.current?.destroy();
+        this.dropping?.destroy();
+        this.settled.forEach((p) => p.destroy());
+        this.settled.clear();
+
+        this.current = undefined;
+        this.dropping = undefined;
+        this.waitingForStill = false;
+        this.stillFrames = 0;
+        this.isGameOver = false;
+        this.rematchRequested = false;
+        this.remoteRematch = false;
+        this.score = 0;
+        this.timeLeft = 600;
+        this.scoreText.setText("Score: 0");
+        this.timerText.setText(`Time: ${this.timeLeft}`);
+
+        const { width, height } = this.scale;
+        this.worldTop = 0;
+        this.worldHeight = height;
+        this.matter.world.setBounds(0, 0, width, height, 64, false, false, false, false);
+        this.cameras.main.setBounds(0, 0, width, height);
+        this.cameras.main.scrollY = 0;
+        this.updateMiniCamZoom();
+
+        this.pieceSeq = 0;
+        this.currentTurn = "host";
+        if (this.isOffline || this.net?.isHost) this.spawnPiece("host");
     }
 }
