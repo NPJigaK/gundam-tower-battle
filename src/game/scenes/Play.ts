@@ -159,7 +159,7 @@ export class Play extends Scene {
         //   右クリック：45° 回転
         //   左クリック：ピースを drop（dynamic 化）して still 監視モード突入
         this.input.on(Input.Events.POINTER_UP, (p: Input.Pointer) => {
-            if (!this.current) return;
+            if (!this.input.enabled || !this.current) return;
             if (p.rightButtonReleased()) {
                 this.current.angle += 45; // 右クリック回転
                 return;
@@ -173,6 +173,14 @@ export class Play extends Scene {
             this.stillFrames = 0;
             this.input.enabled = false; // 停止確定まで操作禁止
             this.scoreText.setText(`Score: ${++this.score}`);
+        });
+
+        // Start with input disabled to ignore pointer events from the previous
+        // scene (e.g., releasing the Restart button). It is re-enabled shortly
+        // after the scene starts to avoid an unintended immediate drop.
+        this.input.enabled = false;
+        this.time.delayedCall(100, () => {
+            this.input.enabled = true;
         });
 
         /* ──────────── 最初のピースを出現 ─────────────────────── */
