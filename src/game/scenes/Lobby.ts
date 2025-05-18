@@ -42,15 +42,25 @@ export class Lobby extends Scene {
             .setOrigin(0.5);
 
         /* ============= ① Create Room ============= */
-        this.add
-            .text(cx, 200, "Create Room", {
-                font: "24px Arial",
-                backgroundColor: "#0066cc",
-                padding: { left: 12, right: 12, top: 4, bottom: 4 },
+        const createBtn = this.rexUI
+            .add.label({
+                background: this.rexUI.add.roundRectangle(
+                    0,
+                    0,
+                    0,
+                    0,
+                    10,
+                    0x0066cc
+                ),
+                text: this.add.text(0, 0, "Create Room", {
+                    font: "24px Arial",
+                    color: "#fff",
+                }),
+                space: { left: 12, right: 12, top: 8, bottom: 8 },
             })
-            .setOrigin(0.5)
             .setInteractive({ useHandCursor: true })
             .on("pointerup", () => this.onCreate(cx));
+        createBtn.setPosition(cx, 200).setOrigin(0.5);
 
         /* ============= ② Join ============= */
         this.inputField = document.createElement("input");
@@ -60,15 +70,25 @@ export class Lobby extends Scene {
         this.inputField.style.width = "160px";
         this.add.dom(cx, 320, this.inputField);
 
-        this.add
-            .text(cx, 380, "Join", {
-                font: "24px Arial",
-                backgroundColor: "#28a745",
-                padding: { left: 28, right: 28, top: 4, bottom: 4 },
+        const joinBtn = this.rexUI
+            .add.label({
+                background: this.rexUI.add.roundRectangle(
+                    0,
+                    0,
+                    0,
+                    0,
+                    10,
+                    0x28a745
+                ),
+                text: this.add.text(0, 0, "Join", {
+                    font: "24px Arial",
+                    color: "#fff",
+                }),
+                space: { left: 28, right: 28, top: 8, bottom: 8 },
             })
-            .setOrigin(0.5)
             .setInteractive({ useHandCursor: true })
             .on("pointerup", () => this.onJoin());
+        joinBtn.setPosition(cx, 380).setOrigin(0.5);
     }
 
     /* ------------------------------------------------------------------
@@ -99,7 +119,7 @@ export class Lobby extends Scene {
             .on("pointerup", async () => {
                 try {
                     await navigator.clipboard.writeText(this.roomId);
-                    copyBtn.setText("✔︎ Copied!").setBackgroundColor("#2ecc71");
+                    copyBtn.setText("✔").setBackgroundColor("#2ecc71");
                     this.time.delayedCall(1000, () =>
                         copyBtn.setText("Copy").setBackgroundColor("#444")
                     );
