@@ -26,27 +26,37 @@ export class Preloader extends Scene {
      * preload() — Phaser が自動で呼び出すアセット読み込み処理
      * ------------------------------------------------------------------- */
     preload(): void {
-        /* ------------------ 1. ローディングバーの簡易表示 ------------------ */
+        /* ------------------ 1. ローディングバーの RexUI 表示 ------------------ */
         const { width, height } = this.scale;
-        const barW = width * 0.6,
-            barH = 18;
+        const barW = width * 0.6;
+        const barH = 20;
         const barX = (width - barW) / 2;
-        const barY = (height - barH) / 2;
+        const barY = height / 2 - barH / 2;
 
-        /** 外枠（白） */
-        this.add
-            .rectangle(barX, barY, barW, barH, 0xffffff)
+        // 外枠を RexUI の roundRectangle で描画
+        this.rexUI
+            .add.roundRectangle(barX, barY, barW, barH, 0, 0x000000)
             .setOrigin(0, 0)
-            .setStrokeStyle(2, 0x000000);
+            .setStrokeStyle(2, 0xffffff);
 
-        /** 内側の進捗バー（水色） */
-        const progress = this.add
-            .rectangle(barX, barY, 0, barH, 0x9ad1ff)
+        // 内側の赤い進捗バー
+        const progress = this.rexUI
+            .add.roundRectangle(barX + 3, barY + 3, 0, barH - 6, 0, 0xff0000)
             .setOrigin(0, 0);
+
+        // ローディングテキスト
+        const text = this.add
+            .text(width / 2, barY - 30, "LOADING 0%", {
+                fontFamily: "Courier",
+                fontSize: "20px",
+                color: "#ffffff",
+            })
+            .setOrigin(0.5);
 
         // ▶ 進捗イベントでバー幅を更新
         this.load.on("progress", (ratio: number) => {
-            progress.width = barW * ratio;
+            progress.width = (barW - 6) * ratio;
+            text.setText(`LOADING ${Math.floor(ratio * 100)}%`);
         });
 
         /* ------------------ 画像（PNG / TextureAtlas） ------------------ */
