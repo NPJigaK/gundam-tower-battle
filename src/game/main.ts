@@ -47,6 +47,17 @@ const config: Phaser.Types.Core.GameConfig = {
     scene: [Boot, Preloader, Lobby, Play, GameOver],
 
     dom: { createContainer: true },
+
+    plugins: {
+        scene: [
+            { key: "rexUI", plugin: (window as any).rexui, mapping: "rexUI" },
+            {
+                key: "rexInputText",
+                plugin: (window as any).rexinputtextplugin,
+                mapping: "rexInputText",
+            },
+        ],
+    },
     
     /* 物理エンジン設定 -------------------------------------------------- */
     physics: {

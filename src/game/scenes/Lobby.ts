@@ -1,4 +1,4 @@
-// src/scenes/Lobby.ts  – コピー機能付き
+// src/scenes/Lobby.ts — RexUI based lobby screen
 import { Scene } from "phaser";
 import { EventBus } from "../EventBus";
 import {
@@ -6,112 +6,124 @@ import {
     TrysteroNetwork,
 } from "../../network/trysteroConnection";
 
-/* ------------------------------------------------------------------
- * 6 桁のランダム英数字を生成するユーティリティ
- * ------------------------------------------------------------------ */
-const genRoomId = () =>
-    Math.random().toString(36).substring(2, 8).toUpperCase();
+const genRoomId = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
-/**
- * Lobby シーン — オンライン対戦部屋の作成・参加を行う
- */
 export class Lobby extends Scene {
     private roomId = genRoomId();
-    private inputField?: HTMLInputElement;
+    private inputField!: any; // RexInputText instance
     private hostNet?: TrysteroNetwork;
 
     constructor() {
-        // シーンキー "Lobby" を指定して親クラス初期化
         super("Lobby");
     }
 
-    /**
-     * create() — UI の生成とボタンイベント登録
-     */
     create() {
         EventBus.emit("current-scene-ready", this);
-        const { width } = this.scale;
+        const { width, height } = this.scale;
         const cx = width / 2;
+        const cy = height / 2;
 
-        /* タイトル */
-        this.add
-            .text(cx, 100, "Gundam Tower Battle – Lobby", {
-                font: "28px Arial",
-                color: "#fff",
-            })
-            .setOrigin(0.5);
+        const title = this.add.text(0, 0, "Gundam Tower Battle – Lobby", {
+            font: "28px Arial",
+            color: "#fff",
+        });
 
-        /* ============= ① Create Room ============= */
-        this.add
-            .text(cx, 200, "Create Room", {
-                font: "24px Arial",
-                backgroundColor: "#0066cc",
-                padding: { left: 12, right: 12, top: 4, bottom: 4 },
+        const createBtn = this.rexUI
+            .add.label({
+                background: this.rexUI.add.roundRectangle(0, 0, 0, 0, 10, 0x0066cc),
+                text: this.add.text(0, 0, "Create Room", {
+                    font: "24px Arial",
+                    color: "#fff",
+                }),
+                space: { left: 12, right: 12, top: 8, bottom: 8 },
             })
-            .setOrigin(0.5)
             .setInteractive({ useHandCursor: true })
             .on("pointerup", () => this.onCreate(cx));
 
-        /* ============= ② Join ============= */
-        this.inputField = document.createElement("input");
-        this.inputField.type = "text";
-        this.inputField.maxLength = 6;
-        this.inputField.placeholder = "Enter Room ID";
-        this.inputField.style.width = "160px";
-        this.add.dom(cx, 320, this.inputField);
+        this.inputField = this.rexUI.add.inputText(0, 0, 160, 40, {
+            type: "text",
+            maxLength: 6,
+            fontSize: "20px",
+            placeholder: "Enter Room ID",
+        });
 
-        this.add
-            .text(cx, 380, "Join", {
-                font: "24px Arial",
-                backgroundColor: "#28a745",
-                padding: { left: 28, right: 28, top: 4, bottom: 4 },
+        const joinBtn = this.rexUI
+            .add.label({
+                background: this.rexUI.add.roundRectangle(0, 0, 0, 0, 10, 0x28a745),
+                text: this.add.text(0, 0, "Join", {
+                    font: "24px Arial",
+                    color: "#fff",
+                }),
+                space: { left: 20, right: 20, top: 8, bottom: 8 },
             })
-            .setOrigin(0.5)
             .setInteractive({ useHandCursor: true })
             .on("pointerup", () => this.onJoin());
+
+        const sizer = this.rexUI.add.sizer({
+            x: cx,
+            y: cy,
+            orientation: "y",
+            space: { item: 20 },
+        });
+
+        sizer.add(title, 0, "center", 0, true);
+        sizer.add(createBtn, 0, "center", 0, true);
+        sizer.add(this.inputField, 0, "center", 0, true);
+        sizer.add(joinBtn, 0, "center", 0, true);
+        sizer.layout();
     }
 
-    /* ------------------------------------------------------------------
-     * onCreate() — 部屋作成ボタン押下時の処理
-     * ------------------------------------------------------------------ */
     private onCreate(cx: number) {
-        /* 部屋を生成して待機 */
         this.roomId = genRoomId();
         this.hostNet = createTrysteroNetwork(this.roomId, true);
 
-        /* Room ID 表示 */
-        const idText = this.add
-            .text(cx, 260, `Room ID: ${this.roomId}`, {
-                font: "24px Courier",
-                color: "#ffff66",
+        const idText = this.rexUI
+            .add.label({
+                x: cx,
+                y: 260,
+                background: this.rexUI.add.roundRectangle(0, 0, 0, 0, 10, 0x222222),
+                text: this.add.text(0, 0, `Room ID: ${this.roomId}`, {
+                    font: "24px Courier",
+                    color: "#ffff66",
+                }),
+                space: { left: 12, right: 12, top: 8, bottom: 8 },
             })
-            .setOrigin(0.5);
+            .setOrigin(0.5, 0.5);
 
-        /* Copy ボタン */
-        const copyBtn = this.add
-            .text(cx, 300, "Copy", {
-                font: "20px Arial",
-                backgroundColor: "#444",
-                padding: { left: 20, right: 20, top: 2, bottom: 2 },
+        const copyBtn = this.rexUI
+            .add.label({
+                x: cx,
+                y: 300,
+                background: this.rexUI.add.roundRectangle(0, 0, 0, 0, 10, 0x444444),
+                text: this.add.text(0, 0, "Copy", {
+                    font: "20px Arial",
+                    color: "#fff",
+                }),
+                space: { left: 20, right: 20, top: 4, bottom: 4 },
             })
-            .setOrigin(0.5)
+            .setOrigin(0.5, 0.5)
             .setInteractive({ useHandCursor: true })
             .on("pointerup", async () => {
                 try {
                     await navigator.clipboard.writeText(this.roomId);
-                    copyBtn.setText("✔︎ Copied!").setBackgroundColor("#2ecc71");
+                    copyBtn.getElement("text").setText("✔").setColor("#2ecc71");
                     this.time.delayedCall(1000, () =>
-                        copyBtn.setText("Copy").setBackgroundColor("#444")
+                        copyBtn
+                            .getElement("text")
+                            .setText("Copy")
+                            .setColor("#ffffff")
                     );
                 } catch {
-                    copyBtn.setText("Failed").setBackgroundColor("#e74c3c");
+                    copyBtn.getElement("text").setText("Failed").setColor("#e74c3c");
                     this.time.delayedCall(1000, () =>
-                        copyBtn.setText("Copy").setBackgroundColor("#444")
+                        copyBtn
+                            .getElement("text")
+                            .setText("Copy")
+                            .setColor("#ffffff")
                     );
                 }
             });
 
-        /* 待機中テキスト */
         const waitText = this.add
             .text(cx, 350, "Waiting for opponent…", {
                 font: "22px Arial",
@@ -119,7 +131,6 @@ export class Lobby extends Scene {
             })
             .setOrigin(0.5);
 
-        /* 相手が join → Play へ遷移 */
         this.hostNet.room.onPeerJoin(() => {
             waitText.setText("Opponent found!");
             this.time.delayedCall(500, () =>
@@ -132,11 +143,8 @@ export class Lobby extends Scene {
         });
     }
 
-    /* ------------------------------------------------------------------
-     * onJoin() — 入力された部屋IDで Play シーンへ移動
-     * ------------------------------------------------------------------ */
     private onJoin() {
-        const id = (this.inputField?.value ?? "").trim().toUpperCase();
+        const id = (this.inputField.text ?? "").trim().toUpperCase();
         if (/^[A-Z0-9]{6}$/.test(id)) {
             this.scene.start("Play", { roomId: id, isHost: false });
         }

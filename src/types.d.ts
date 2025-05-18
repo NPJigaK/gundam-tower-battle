@@ -43,3 +43,19 @@ export interface PieceInput {
  * 3. ゲーム結果
  * ------------------------------------------------------------------------ */
 export type GameResult = PlayerSide | "draw";
+
+declare global {
+    interface Window {
+        rexui: any;
+        rexinputtextplugin: any;
+    }
+
+    namespace Phaser {
+        interface Scene {
+            rexUI: any;
+            rexInputText: any;
+        }
+    }
+}
+
+export {};
