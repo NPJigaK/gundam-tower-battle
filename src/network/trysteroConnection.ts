@@ -7,7 +7,7 @@
 //  必要な情報をコメントとして残しています。
 // ---------------------------------------------------------------------------
 import { joinRoom, Room } from "trystero";
-import type { PieceInput, SyncPayload, GameResult } from "../types";
+import type { PieceInput, SyncPayload, GameResult, NetCommand } from "../types";
 
 export interface TrysteroNetwork {
   /** true のときホストとして振る舞う */
@@ -20,11 +20,13 @@ export interface TrysteroNetwork {
   sendInput: (input: PieceInput) => void;
   sendSync: (sync: SyncPayload) => void;
   sendResult: (result: GameResult) => void;
+  sendCommand: (cmd: NetCommand) => void;
 
   /* 受信ハンドラ登録 — onXXX(cb) 形式でリスナを追加 */
   onInput: (cb: (input: PieceInput) => void) => void;
   onSync:  (cb: (sync: SyncPayload) => void) => void;
   onResult: (cb: (result: GameResult) => void) => void;
+  onCommand: (cb: (cmd: NetCommand) => void) => void;
 }
 
 export function createTrysteroNetwork(
@@ -38,6 +40,7 @@ export function createTrysteroNetwork(
   const [sendInput, onInput] = room.makeAction<PieceInput>("input");
   const [sendSync, onSync] = room.makeAction<SyncPayload>("sync");
   const [sendResult, onResult] = room.makeAction<GameResult>("result");
+  const [sendCommand, onCommand] = room.makeAction<NetCommand>("command");
 
   return {
     isHost,
@@ -45,8 +48,10 @@ export function createTrysteroNetwork(
     sendInput,
     sendSync,
     sendResult,
+    sendCommand,
     onInput,
     onSync,
     onResult,
+    onCommand,
   };
 }
