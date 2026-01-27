@@ -1,0 +1,33 @@
+name: Cleanup jobs after deploy
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy to GitHub Pages
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Delete old deployments
+        uses: strumwolf/delete-deployment-environment@v3.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: github-pages
+          onlyRemoveDeployments: true
+
+  delete-runs:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2.1.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 0
