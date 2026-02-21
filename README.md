@@ -5,7 +5,7 @@
 
 ## 技術スタック
 
-- Phaser 3.88.1 + Matter.js
+- Phaser 3.90.0 + Matter.js
 - React 19.2.4 + Vite
 - Trystero（P2P 通信）
 - TypeScript
