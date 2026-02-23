@@ -24,7 +24,7 @@
     "dependencies": {
         "mitt": "^3.0.1",
         "phaser": "^3.90.0",
-        "phaser3-rex-plugins": "^1.80.15",
+        "phaser3-rex-plugins": "^1.80.18",
         "react": "^19.2.4",
         "react-dom": "^19.1.0",
         "trystero": "^0.22.0"
