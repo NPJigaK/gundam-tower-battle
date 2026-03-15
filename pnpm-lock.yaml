@@ -12,8 +12,8 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1
       phaser:
-        specifier: ^3.88.2
-        version: 3.88.2
+        specifier: ^3.90.0
+        version: 3.90.0
       phaser3-rex-plugins:
         specifier: ^1.80.15
         version: 1.80.15(graphology-types@0.24.8)
@@ -1334,9 +1334,6 @@ packages:
   eventemitter3@3.1.2:
     resolution: {integrity: sha512-tvtQIeLVHjDkJYnzf2dgVMxfuSGJeM/7UCG17TT4EumTfNtF+0nebF/4zWOIkCreAbtNqhGEboB6BWrwqNaw4Q==}
 
-  eventemitter3@5.0.1:
-    resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
-
   eventemitter3@5.0.4:
     resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
 
@@ -1828,8 +1825,8 @@ packages:
   phaser3-rex-plugins@1.80.15:
     resolution: {integrity: sha512-Ur973N1W5st6XEYBcJko8eTcEbdDHMM+m7VqvT3j/EJeJwYyJ3bVb33JJDsFgefk3A2iAz2itP/UY7CzxJOJVA==}
 
-  phaser@3.88.2:
-    resolution: {integrity: sha512-UBgd2sAFuRJbF2xKaQ5jpMWB8oETncChLnymLGHcrnT53vaqiGrQWbUKUDBawKLm24sghjKo4Bf+/xfv8espZQ==}
+  phaser@3.90.0:
+    resolution: {integrity: sha512-/cziz/5ZIn02uDkC9RzN8VF9x3Gs3XdFFf9nkiMEQT3p7hQlWuyjy4QWosU802qqno2YSLn2BfqwOKLv/sSVfQ==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -3850,8 +3847,6 @@ snapshots:
 
   eventemitter3@3.1.2: {}
 
-  eventemitter3@5.0.1: {}
-
   eventemitter3@5.0.4: {}
 
   events@3.3.0: {}
@@ -4403,9 +4398,9 @@ snapshots:
       - encoding
       - graphology-types
 
-  phaser@3.88.2:
+  phaser@3.90.0:
     dependencies:
-      eventemitter3: 5.0.1
+      eventemitter3: 5.0.4
 
   picocolors@1.1.1: {}
 
